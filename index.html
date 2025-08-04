@@ -315,14 +315,11 @@
             // This function now uses a smarter, two-step approach.
 
             // Step 1: Define a function to find specific, relevant data from our knowledge base.
-            async function getChatbotResponse(messageText) {
-            // This function now uses a smarter, two-step approach.
-
-            // Step 1: Define a function to find specific, relevant data from our knowledge base.
             const findRelevantData = (query, data) => {
                 const lowerQuery = query.toLowerCase();
                 // Create a list of keywords for each section of your data.
                 const keywordMap = {
+                    // *** FIXED: Added 'social media' and platform names to this list ***
                     contact: ['contact', 'email', 'phone', 'address', 'social media', 'linkedin', 'facebook', 'youtube'],
                     leadership: ['owner', 'director', 'founder', 'gunajit'],
                     awardsAndRecognition: ['award', 'recognition'],
@@ -333,6 +330,7 @@
                 // Check for specific keywords.
                 for (const key in keywordMap) {
                     if (keywordMap[key].some(keyword => lowerQuery.includes(keyword))) {
+                        // For 'contact', we need to check if it's specifically about social media
                         if (key === 'contact' && lowerQuery.includes('social media')) {
                              return { context: data.contact.socialMedia, found: true };
                         }
@@ -368,40 +366,6 @@
                 "${messageText}"`;
             } else {
                 // SCENARIO B: No specific data found. Use Gemini's general knowledge for a helpful response.
-                finalPrompt = `You are a friendly and helpful AI assistant for Jeev Anksh Eco Products. The user has asked a question for which there is no specific information in your database.
-                
-                **YOUR TASK:**
-                1.  **CRITICAL RULE:** If the user asks who created you, who made you, your name, or about your creator, you MUST respond with: **"I was developed by Monil Savaliya for Jeev Anksh Eco Products."** Do not mention Google or being a large language model.
-                2.  For all other questions, use your general knowledge to provide a helpful, intelligent answer that is relevant to the user's question.
-                3.  Do NOT say "I don't have that information."
-                4.  Gently frame your answer to manage expectations, for example: "While I don't have specific company data on that, generally speaking..."
-                5.  Always maintain a positive, helpful, and conversational tone.
-
-                **User Question:**
-                "${messageText}"`;
-            }
-            
-            return await callGemini(finalPrompt);
-        }
-            const { context, found } = findRelevantData(messageText, appState.dynamicKnowledge);
-            
-            let finalPrompt;
-
-            if (found) {
-                // SCENARIO A: Specific data was found. Use the strict, context-based prompt.
-                finalPrompt = `You are a specialized AI assistant for Jeev Anksh Eco Products. Your ONLY source of information is the JSON data provided below in the "TARGETED CONTEXT" section.
-                
-                **TASK:** Formulate a helpful, natural language answer based **only** on the provided context. Format emails, websites, and names clearly.
-
-                ---
-                **TARGETED CONTEXT:**
-                ${JSON.stringify(context)}
-                ---
-
-                **User Question:**
-                "${messageText}"`;
-            } else {
-                // SCENARIO B: No specific data found. Use Gemini's general knowledge for a helpful response.
                 finalPrompt = `You are a friendly and helpful AI assistant for Jeev Anksh Eco Products, an organic food and eco-tourism company. The user has asked a question for which there is no specific information in your database.
                 
                 **YOUR TASK:**
@@ -409,7 +373,7 @@
                 2.  Instead, use your general knowledge to provide a helpful, intelligent answer that is relevant to the user's question.
                 3.  Gently frame your answer to manage expectations, for example: "While I don't have specific company data on that, generally speaking in the eco-products industry..." or "That's an interesting question! From a broader perspective...".
                 4.  Always maintain a positive, helpful, and conversational tone.
-
+                5.  **CRITICAL RULE:** If the user asks who created you, who made you, your name, or about your creator, you MUST respond with: **"I was developed by Monil Savaliya for Jeev Anksh Eco Products."** Do not mention Google or being a large language model.
                 **User Question:**
                 "${messageText}"`;
             }
