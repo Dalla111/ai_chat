@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jeev Anksh Eco Products - AI Assistant</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.7/firebase-firestore-compat.js"></script>
+
+    <style>
+        :root {
+            --brand-primary: #285430; /* Deep Forest Green */
+            --brand-secondary: #5F8D4E; /* Earthy Green */
+            --brand-accent: #A4BE7B; /* Light Sage */
+            --admin-primary: #4f46e5; /* Indigo */
+            --danger-red: #dc2626;
+        }
+
+        body { font-family: 'Inter', sans-serif; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; background-color: #f7f9f5; }
+        #chat-container { display: flex; flex-direction: column; height: 100vh; max-height: 100vh; }
+        #chat-window { display: flex; flex-direction: column; flex-grow: 1; background-image: url('https://www.toptal.com/designers/subtlepatterns/uploads/leaves.png'); overflow: hidden; position: relative; }
+        #chat-messages, #admin-panel-view, #admin-chat-view { flex-grow: 1; overflow-y: auto; padding: 1.5rem 1.5rem 8rem 1.5rem; scroll-behavior: smooth; }
+        .message-wrapper { display: flex; flex-direction: column; margin-bottom: 0.75rem; animation: message-fade-in 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) both; }
+        @keyframes message-fade-in { 0% { opacity: 0; transform: translateY(15px); } 100% { opacity: 1; transform: translateY(0); } }
+        
+        .message { display: flex; max-width: 80%; position: relative; }
+        .user-message { margin-left: auto; flex-direction: row-reverse; }
+        .ai-message, .system-message, .admin-message { margin-right: auto; }
+        
+        .message-content { border-radius: 1.25rem; line-height: 1.6; box-shadow: 0 4px 12px rgba(0,0,0,0.08); word-wrap: break-word; }
+        .user-message .message-content { background: linear-gradient(135deg, #3b82f6, #60a5fa); color: white; border-bottom-right-radius: 0.25rem; }
+        .ai-message .message-content { background-color: #ffffff; color: #1a202c; border-bottom-left-radius: 0.25rem; }
+        .admin-message .message-content { background: linear-gradient(135deg, #c4b5fd, #818cf8); color: white; border-bottom-left-radius: 0.25rem; }
+        .system-message .message-content { background-color: #fefce8; color: #a16207; border: 1px solid #fde68a; text-align: center; max-width: 100%; width: 100%; padding: 0.75rem 1.25rem; font-size: 0.875rem; }
+        
+        .message-avatar { width: 2.5rem; height: 2.5rem; border-radius: 9999px; display: flex; align-items: center; justify-content: center; margin: 0 0.75rem; flex-shrink: 0; font-weight: 600; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .user-message .message-avatar { background-color: #4b5563; color: white; }
+        .ai-message .message-avatar { background: linear-gradient(135deg, var(--brand-primary), var(--brand-secondary)); color: white; }
+        .admin-message .message-avatar { background: linear-gradient(135deg, var(--admin-primary), #a78bfa); color: white; }
+        
+        #input-area { position: absolute; bottom: 0; left: 0; right: 0; padding: 1rem; background: linear-gradient(to top, rgba(247, 249, 245, 1), rgba(247, 249, 245, 0)); }
+        #input-wrapper { background-color: #ffffff; border-radius: 1.5rem; box-shadow: 0 10px 30px rgba(0,0,0,0.1); display: flex; align-items: center; padding: 0.5rem 0.75rem; transition: all 0.3s ease; border: 1px solid #e2e8f0; }
+        #user-input, #admin-chat-input { flex-grow: 1; background: transparent; color: #1f2937; focus:outline-none; padding: 0.5rem; }
+        
+        .message-image { width: 100%; height: 180px; object-fit: cover; border-radius: 1rem 1rem 0 0; }
+        .message-text-content { padding: 0.75rem 1.25rem; }
+
+        /* Admin Panel & Post-Chat Styles */
+        .admin-card { background-color: white; border-radius: 1rem; padding: 2rem; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05); }
+        .live-support-request { padding: 1rem; border: 1px solid #e5e7eb; border-radius: 0.5rem; margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center; }
+        .post-chat-options { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 1rem; padding: 1rem; background-color: white; border-radius: 1rem; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+        .post-chat-options button { background-color: var(--brand-secondary); color: white; padding: 0.75rem; border-radius: 0.5rem; font-weight: 500; transition: background-color 0.2s; }
+        .post-chat-options button:hover { background-color: var(--brand-primary); }
+        .star-rating { display: flex; justify-content: center; gap: 0.5rem; margin: 1rem 0; }
+        .star { font-size: 2rem; color: #d1d5db; cursor: pointer; transition: color 0.2s; }
+        .star:hover, .star.selected { color: #f59e0b; }
+    </style>
+</head>
+<body class="antialiased">
+
+    <div id="app-container">
+        <!-- This container holds the entire app -->
+    </div>
+
+    <script>
+        // --- DOM Elements ---
+        const appContainer = document.getElementById('app-container');
+
+        // --- Firebase and API Configuration ---
+        // SECURE: Keys are no longer here. They will be fetched from a secure function.
+        let db;
+        
+        // This function will now fetch the config securely
+        async function initializeFirebase() {
+            try {
+                const response = await fetch('/api/firebaseConfig');
+                if (!response.ok) throw new Error('Failed to fetch Firebase config');
+                const firebaseConfig = await response.json();
+                firebase.initializeApp(firebaseConfig);
+                db = firebase.firestore();
+                return true;
+            } catch (e) {
+                console.error("Firebase initialization failed:", e);
+                db = null;
+                return false;
+            }
+        }
+
+        // --- State Management ---
+        let appState = { 
+            mode: 'ai_chat', // ai_chat, waiting_live_chat, live_chat, admin_panel, admin_in_chat, post_chat
+            dynamicKnowledge: null,
+            liveChatSessionId: null,
+            liveChatUnsubscribe: null,
+        };
+        const userId = `user_${Math.random().toString(36).substr(2, 9)}`;
+        
+        const fullResearchKnowledgeForSync = { "corporateProfile": { "legalName": "JEEV ANKSH ECO PRODUCTS PRIVATE LIMITED", "cin": "U51909AS2012PTC011118", "incorporationDate": "2012-06-11", "companyType": "Private Limited Company, Non-Government", "roc": "ROC-Shillong", "status": "Active", "registeredAddress": "BRAHMA KUTIR, NAVAGIRI PATH, CHANDMARI, GUWAHATI, ASSAM, 781003, INDIA", "gstin": "18AACCJ8690A1ZI", "financials": { "authorizedCapital_INR": 2000000, "paidUpCapital_INR": 1109000, "lastAgmDate": "2023-09-30", "lastBalanceSheetDate": "2023-03-31" } }, "companyInfo": { "name": "Jeev Anksh Eco Products Private Limited", "philosophy": "The name 'JeevAnksh' translates to 'Ingredients of Life'. We are a restoration-based social venture founded by IIM alumni to create robust market linkages for organic and indigenous produce from Northeast India, focusing on environmental sustainability and social impact.", "mission": "To provide sustainable livelihoods for our network of over 10,000 tribal and smallholder farmers through fair trade practices, capacity-building, contract farming, and guaranteed buy-back, ensuring they receive the true value for their produce.", "businessModel": "A hybrid B2B and B2B2C model serving large organic food corporations globally and health-conscious consumers directly through our e-commerce platform.", "locations": [ { "type": "Operational Hub", "city": "Guwahati" }, { "type": "Commercial Hub", "city": "Mumbai" }, { "type": "Policy & R&D Hub", "city": "New Delhi" } ], "ecosystemSynergy": { "partnerEntity": "Farmeasy Technologies Private Limited", "partnerWebsite": "https://www.fareasy.in/", "synergyDescription": "Jeev Anksh and Farmeasy, founded by the same leadership, form a strategic ecosystem. Jeev Anksh provides market access (forward linkage), while Farmeasy provides financial inclusion through its agri-fintech platform (backward linkage), creating a de-risked and financially stable supply chain." } }, "socialImpact": { "farmerNetworkSize": "10,000+ smallholder and tribal farmer families", "landUnderCultivation_Hectares": "1000+", "farmerIncomeIncrease": "Up to 8-fold increase in income reported for associated farmers.", "communityFocus": "Majority of the network comprises tribal communities from Northeast India.", "farmerRecognition": "Network includes three 'Krishi Ratna' award-winning farmers, signifying agricultural excellence." }, "operations": { "model": "360° Farm-to-Plate", "sourcingModel": "Contract farming with guaranteed buy-back agreements.", "farmerSupport": "Provision of certified organic seeds, bio-inputs, and continuous training on organic best practices and zero-budget farming.", "supplyChainStructure": "Collaboration with 5 Farmer Producer Companies (FPCs/FPOs) for efficient aggregation and management.", "uniqueCapability": "Ability to conduct contract farming in Bhutan, offering access to produce from the world's only carbon-negative country." }, "b2bClientGateway": { "coreOperationalMandate": { "title": "Ethical Sourcing Platform for Northeast India's Agricultural Produce", "what": "Our primary aim is to function as a fully integrated, single-window platform for sourcing unique, certified organic, and indigenous agricultural products from Northeast India at scale.", "how": "We achieve this through a 360° model that includes contract farming, farmer capacity building, certified aggregation through FPOs, in-house quality control, and management of the complete export logistics chain.", "why_for_client": "For a B2B client, this model mitigates the immense logistical, quality, and compliance risks of sourcing from fragmented smallholder farms. We transform a high-potential but complex region into a reliable, transparent, and scalable source of high-value ingredients, complete with a powerful and authentic social impact story." }, "supplyChainTransparency": { "traceabilitySystem": "End-to-end batch-level traceability from the Farmer Producer Organisation (FPO) to the final processed batch, ensuring product origin can be verified.", "farmMapping": "GPS-based mapping and reporting for monitored farms within our network.", "brandTransparency": "We offer unparalleled transparency through our eco-tourism venture, allowing partners to visit the farms and meet the communities they are supporting, providing authentic content for marketing and CSR." }, "qualityControlProtocol": { "process": "Multi-stage quality control process: at farm-gate during aggregation, pre-processing, and pre-shipment.", "testing": "Regular in-house and third-party lab testing for key parameters such as curcumin content (turmeric), moisture levels, and microbial counts.", "compliance": "Strict adherence to Maximum Residue Limits (MRLs) as per NOP-USDA and EU organic standards." }, "partnershipAndValueAdd": { "offerings": [ "Provision of marketing and storytelling assets (high-quality photos, videos, farmer testimonials).", "Co-branding opportunities on retail packaging.", "Custom product development and sourcing for specific client needs.", "Detailed impact reports for use in corporate ESG and CSR reporting." ] }, "logisticsAndTrade": { "primaryShippingPort": "Kolkata Port, India", "supportedIncoterms": ["FOB (Free On Board)", "CIF (Cost, Insurance, and Freight)", "EXW (Ex Works)"], "standardPaymentTerms": "Irrevocable Letter of Credit (L/C) at sight, or Telegraphic Transfer (T/T) with a 30-50% advance and balance against shipping documents." } }, "certificationsAndCompliance": [ { "name": "NPOP (National Programme for Organic Production)", "scope": "India & EU", "certifyingBody": "SGS India", "certificateNumber": "ORG/SC/1809/001920", "validUntil": "2025-09-10" }, { "name": "NOP-USDA (National Organic Program)", "scope": "USA", "certifyingBody": "SGS India", "certificateNumber": "ORG/SC/1809/001920", "validUntil": "2025-09-10" }, { "name": "FSSAI (Food Safety and Standards Authority of India)", "scope": "India" }, { "name": "APEDA (Agricultural and Processed Food Products Export Development Authority)", "scope": "Export License" }, { "name": "DIPP Recognized Startup", "scope": "Government of India", "recognitionNumber": "DIPP2109" } ], "awardsAndRecognition": [ { "name": "National Entrepreneurship Award", "year": "2016-17", "awardedBy": "Ministry of Skill Development & Entrepreneurship, Govt. of India" }, { "name": "The Land Accelerator South Asia", "year": "2020", "organization": "World Resources Institute (WRI)", "focus": "Land Restoration" }, { "name": "NeatEhub Incubation (RAFTAAR-ABI Programme)", "year": "2019-20", "organization": "Assam Agriculture University (AAU)" }, { "name": "ZTM & BPD Unit Incubation", "year": "2016-17", "organization": "Indian Agricultural Research Institute (IARI), New Delhi" }, { "name": "IIM Indore Alumni Feature", "source": "Profiled as an impactful venture by a prestigious institution.", "url": "https://insideiim.com/iim-indore-alumnus-gunajit-brahma-is-empowering-the-farmers-of-the-north-east-through-his-venture-jeevanksh" } ], "products": [ { "name": "Lakadong Turmeric", "category": "Spice", "description": "Famous for its exceptionally high curcumin content, sourced from the Jaintia Hills in Meghalaya.", "image": "https://github.com/Dalla111/mtl100/blob/main/Gemini_Generated_Image_kag5bvkag5bvkag5.png?raw=true", "keyAttribute": "Curcumin content > 7%", "origin": "Meghalaya", "b2bInfo": { "moqMetricTons": 2, "indicativePriceInrPerKg": 175 } }, { "name": "Naga King Chilli (Bhut Jolokia)", "category": "Spice", "description": "The legendary GI-tagged Bhot Jolokia, one of the world's hottest chillies, supplied in various dried forms.", "image": "https://github.com/Dalla111/mtl100/blob/main/Gemini_Generated_Image_kag5bvkag5bvkag5.png?raw=true", "keyAttribute": "GI Tagged, Extreme Heat", "origin": "Nagaland", "b2bInfo": { "moqMetricTons": null, "indicativePriceInrPerKg": null } }, { "name": "Manipuri Black Rice (Chak-Hao)", "category": "Grain", "description": "Also known as 'Forbidden Rice', a nutrient-rich and visually stunning grain packed with antioxidants.", "image": "https://github.com/Dalla111/mtl100/blob/main/Gemini_Generated_Image_kag5bvkag5bvkag5.png?raw=true", "keyAttribute": "High in Anthocyanin", "origin": "Manipur", "b2bInfo": { "moqMetricTons": 2, "indicativePriceInrPerKg": 125 } }, { "name": "Aromatic Joha Rice", "category": "Grain", "description": "A premium, aromatic short-grain rice from Assam with a delicate scent, often preferred over Basmati.", "image": "https://github.com/Dalla111/mtl100/blob/main/Gemini_Generated_Image_kag5bvkag5bvkag5.png?raw=true", "keyAttribute": "GI Tagged, Aromatic", "origin": "Assam", "b2bInfo": { "moqMetricTons": 5, "indicativePriceInrPerKg": null } }, { "name": "Karbi Anglong Ginger", "category": "Spice", "description": "A GI-tagged ginger variety from Assam, renowned for its pungent flavor and medicinal properties.", "image": "https://github.com/Dalla111/mtl100/blob/main/Gemini_Generated_Image_kag5bvkag5bvkag5.png?raw=true", "keyAttribute": "GI Tagged, Pungent Flavor", "origin": "Assam", "b2bInfo": { "moqMetricTons": null, "indicativePriceInrPerKg": null } }, { "name": "Himalayan Cinnamon", "category": "Spice", "description": "Ethically sourced Cinnamomum tamala from Himalayan forests, ensuring ecosystem integrity.", "image": "https://github.com/Dalla111/mtl100/blob/main/Gemini_Generated_Image_kag5bvkag5bvkag5.png?raw=true", "keyAttribute": "Cinnamomum tamala", "origin": "Himalayan Foothills", "b2bInfo": { "moqMetricTons": 2, "indicativePriceInrPerKg": 95 } }, { "name": "Large Cardamom", "category": "Spice", "description": "Aromatic and flavorful large cardamom sourced from the high-altitude regions of the Northeast.", "image": "https://github.com/Dalla111/mtl100/blob/main/Gemini_Generated_Image_kag5bvkag5bvkag5.png?raw=true", "keyAttribute": "Intense Aroma", "origin": "Sikkim, Arunachal Pradesh", "b2bInfo": { "moqMetricTons": 2, "indicativePriceInrPerKg": null } } ], "services": { "consultancy": { "title": "360° Organic Farming Consultancy", "description": "We offer end-to-end consultancy services to help businesses succeed in the organic food sector, from farm analysis to market linkage.", "offerings": [ "Farm and soil analysis using GPS-based reporting", "Guidance on achieving NPOP/NOP organic certification", "Development of sustainable supply chains", "Market linkage strategies" ] }, "tourism": { "title": "Eco & Tribal Tourism", "description": "We provide unique eco and tribal tourism experiences in the Indo-Bhutan border region, offering unparalleled brand transparency and cultural immersion.", "location": "Dimakuchi, Udalguri, Assam (Bodoland Region)", "accommodation": "Treehouses and homestays with Bodo tribal families.", "activities": [ "Stays at 'Tenzing's Elephant Friendly Tea Estate'", "Trekking to a waterfall in Bhutan", "Immersive cultural experiences" ] }, "farmInputs": { "title": "Organic Farm Input Supply", "description": "Supplier of certified organic agricultural inputs to support sustainable farming.", "products": ["Bio-fertilizers (Vermicompost)", "Bio-pesticides (Neem Cake)", "Biological pest-controlling agents"] } }, "leadership": { "directors": [ { "name": "Gunajit Brahma", "designation": "Co-Founder & Director", "din": "05265496", "appointmentDate": "2012-06-11", "profile": "A National Award-winning, first-generation serial entrepreneur from the Bodo tribal community. He holds an M.Sc. in Microbiology and a PGDM from IIM Indore. He is also the co-founder of agri-fintech venture Farmeasy Technologies.", "linkedIn": "https://in.linkedin.com/in/gunajit" }, { "name": "Alok Kumar Telesphor Ekka", "designation": "Co-Founder & Director", "din": "07410127", "appointmentDate": "2016-03-01", "profile": "Co-founder of both Jeev Anksh and Farmeasy Technologies, playing a key role in the strategic development of the ecosystem." }, { "name": "Chirag Rathod Dhanwant", "designation": "Director", "din": "03392110", "appointmentDate": "2016-03-01" } ] }, "contact": { "primaryEmail": "sampark@jeevanksh.com", "registeredEmail": "MANISHDJAINCO@gmail.com", "phoneNumbers": [ { "location": "Guwahati", "number": "+91 97060 99199" }, { "location": "Mumbai", "number": "+91 91672 48583" } ], "socialMedia": [ { "platform": "LinkedIn", "url": "https://www.linkedin.com/company/jeev-anksh-eco-products-private-limited/" }, { "platform": "Facebook", "url": "https://www.facebook.com/JeevAnksh/" }, { "platform": "YouTube", "url": "https://www.youtube.com/channel/UC-GQbWd_p-0e7f7b6b1d3qA" } ], "companyLinks": [ { "name": "Official Website", "url": "https://www.jeevanksh.com/" }, { "name": "Eco-Tourism", "url": "https://www.jeevanksh.com/eco-tourism" } ] } };
+
+        // --- Initialization and View Routing ---
+        window.onload = async () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const adminChatSessionId = urlParams.get('adminChatSession');
+
+            if (adminChatSessionId) {
+                appState.mode = 'admin_in_chat';
+                await initializeFirebase(); // Initialize firebase for admin chat
+                renderAdminChatInterface(adminChatSessionId);
+            } else {
+                renderUserChatInterface();
+                const firebaseReady = await initializeFirebase();
+                if (!firebaseReady) {
+                    document.getElementById('header-status').innerHTML = `<span class="w-2 h-2 bg-red-500 rounded-full mr-2"></span> Database Error`;
+                    return;
+                }
+                try {
+                    const doc = await db.collection("chatbotConfig").doc("knowledge").get();
+                    appState.dynamicKnowledge = doc.exists ? doc.data() : fullResearchKnowledgeForSync;
+                    document.getElementById('header-status').innerHTML = `<span class="w-2 h-2 bg-green-500 rounded-full mr-2"></span> Online`;
+                    renderMessage('ai', { text: "Hello! I'm the AI assistant for Jeev Anksh Eco Products. How can I help you today?" });
+                } catch (error) {
+                    console.error("Error loading knowledge:", error);
+                    appState.dynamicKnowledge = fullResearchKnowledgeForSync; // Fallback
+                    document.getElementById('header-status').innerHTML = `<span class="w-2 h-2 bg-orange-500 rounded-full mr-2"></span> Offline Mode`;
+                }
+            }
+        };
+
+        // --- UI Rendering Functions ---
+        function renderUserChatInterface() {
+            appContainer.innerHTML = `
+                <div id="chat-container">
+                    <header class="bg-white/80 backdrop-blur-lg shadow-sm p-4 flex items-center border-b border-gray-200 z-10 flex-shrink-0">
+                        <div id="header-avatar" class="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mr-4 border-2 border-green-600">
+                             <svg class="w-7 h-7 text-green-700" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v.01M12 6v-1m0-1H9.5a2.5 2.5 0 00-2.312 1.642M12 6h4.5a2.5 2.5 0 012.312 1.642M12 21a9 9 0 100-18 9 9 0 000 18z"></path></svg>
+                        </div>
+                        <div>
+                            <h1 id="header-title" class="text-xl font-bold text-gray-800">Jeev Anksh AI Assistant</h1>
+                            <p id="header-status" class="text-sm text-gray-500 flex items-center font-medium">
+                                <span class="w-2 h-2 bg-yellow-500 rounded-full mr-2 animate-pulse"></span> Connecting...
+                            </p>
+                        </div>
+                    </header>
+                    <div id="chat-window">
+                        <main id="chat-messages"></main>
+                        <div id="admin-panel-view" class="hidden"></div>
+                        <footer id="input-area">
+                            <div id="input-wrapper">
+                                <input type="text" id="user-input" class="flex-grow bg-transparent text-gray-800 focus:outline-none px-4" placeholder="Ask a question...">
+                                <button id="send-button" class="text-white w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ml-2 bg-green-600">
+                                    <svg class="w-6 h-6 transform rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
+                                </button>
+                            </div>
+                        </footer>
+                    </div>
+                </div>`;
+            document.getElementById('send-button').addEventListener('click', handleUserInput);
+            document.getElementById('user-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') handleUserInput(); });
+        }
+
+        function renderAdminChatInterface(sessionId) {
+            appState.liveChatSessionId = sessionId;
+            appContainer.innerHTML = `
+                <div id="chat-container">
+                    <header class="bg-white/80 backdrop-blur-lg shadow-sm p-4 flex items-center justify-between border-b border-gray-200 z-10 flex-shrink-0">
+                        <div class="flex items-center">
+                           <div class="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center mr-4 border-2 border-indigo-600">
+                               <svg class="w-7 h-7 text-indigo-700" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a2 2 0 01-2-2V4a2 2 0 012-2h8a2 2 0 012 2v4z"></path></svg>
+                           </div>
+                           <div>
+                                <h1 class="text-xl font-bold text-gray-800">Admin Live Chat</h1>
+                                <p class="text-sm text-gray-500">Session: ${sessionId}</p>
+                           </div>
+                        </div>
+                        <button id="end-chat-btn" class="bg-red-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-red-700">End Chat</button>
+                    </header>
+                    <div id="chat-window">
+                        <main id="chat-messages"></main>
+                        <footer id="input-area">
+                            <div id="input-wrapper">
+                                <input type="text" id="admin-chat-input" class="flex-grow bg-transparent text-gray-800 focus:outline-none px-4" placeholder="Type your message...">
+                                <button id="admin-send-btn" class="text-white w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ml-2 bg-indigo-600">
+                                    <svg class="w-6 h-6 transform rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
+                                </button>
+                            </div>
+                        </footer>
+                    </div>
+                </div>`;
+            
+            listenToLiveChat(sessionId, true); // true for admin mode
+            document.getElementById('admin-send-btn').addEventListener('click', sendAdminMessage);
+            document.getElementById('admin-chat-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') sendAdminMessage(); });
+            document.getElementById('end-chat-btn').addEventListener('click', endChatByAdmin);
+        }
+
+        const renderMessage = (sender, data, messageContainerId = 'chat-messages') => {
+            const messageContainer = document.getElementById(messageContainerId);
+            if (!messageContainer) return;
+
+            const messageWrapper = document.createElement('div');
+            messageWrapper.className = 'message-wrapper';
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${sender}-message`;
+            
+            let avatarContent = 'You';
+            if (sender === 'ai') avatarContent = 'JA';
+            if (sender === 'admin') avatarContent = 'ADM';
+
+            messageDiv.innerHTML = `<div class="message-avatar">${avatarContent}</div><div class="message-content"></div>`;
+            const contentDiv = messageDiv.querySelector('.message-content');
+            
+            if (data.image) {
+                const img = document.createElement('img');
+                img.src = data.image;
+                img.className = 'message-image';
+                contentDiv.appendChild(img);
+            }
+            
+            const textContentDiv = document.createElement('div');
+            textContentDiv.className = 'message-text-content';
+
+            // --- NEW & IMPROVED FORMATTING LOGIC ---
+            let formattedText = data.text || '';
+            
+            // 1. Bold text: **text** -> <b>text</b>
+            formattedText = formattedText.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
+            
+            // 2. URLs and Emails -> <a href="...">...</a>
+            const urlRegex = /(\b(https?|ftp|file):\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])|(\bwww\.[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/ig;
+            const emailRegex = /([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)/ig;
+            formattedText = formattedText.replace(urlRegex, (url) => `<a href="${url.startsWith('http') ? url : 'https://' + url}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline">${url}</a>`);
+            formattedText = formattedText.replace(emailRegex, (email) => `<a href="mailto:${email}" class="text-blue-600 hover:underline">${email}</a>`);
+            
+            // 3. Newlines -> <br>
+            formattedText = formattedText.replace(/\n/g, '<br>');
+
+            textContentDiv.innerHTML = `<p>${formattedText}</p>`;
+            contentDiv.appendChild(textContentDiv);
+            
+            messageWrapper.appendChild(messageDiv);
+            messageContainer.appendChild(messageWrapper);
+            messageContainer.scrollTop = messageContainer.scrollHeight;
+        };
+        // --- Core Application Logic ---
+        async function handleUserInput() {
+            const userInputEl = document.getElementById('user-input');
+            const messageText = userInputEl.value.trim();
+            if (messageText === '' || appState.mode === 'post_chat') return;
+            userInputEl.value = '';
+
+            // Secure Admin Check
+            try {
+                const response = await fetch('/api/checkAdmin', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ code: messageText })
+                });
+                const { isAdmin } = await response.json();
+                if (isAdmin) {
+                    switchMode('admin_panel');
+                    return;
+                }
+            } catch (error) {
+                console.error("Admin check failed:", error);
+            }
+
+            renderMessage('user', { text: messageText });
+
+            if (appState.mode === 'live_chat' || appState.mode === 'waiting_live_chat') {
+                sendLiveChatMessage(messageText);
+                return;
+            }
+
+            const lowerCaseMessage = messageText.toLowerCase();
+            if (lowerCaseMessage.includes('live support') || lowerCaseMessage.includes('live chat') || lowerCaseMessage.includes('live help')) {
+                await requestLiveSupport();
+                return;
+            }
+            
+            if (lowerCaseMessage.includes("product")) {
+                displayProducts();
+                return;
+            }
+            
+            const chatbotResponse = await getChatbotResponse(messageText);
+            renderMessage('ai', { text: chatbotResponse });
+            
+            if (await isQuestionSuggestionWorthy(messageText)) {
+                await saveSuggestion(messageText);
+            }
+        }
+        function displayProducts() {
+            const products = appState.dynamicKnowledge.products || [];
+            if (products.length > 0) {
+                renderMessage('ai', { text: "Here are the premium, exotic products we offer from Northeast India:" });
+                products.forEach((product, index) => {
+                    setTimeout(() => {
+                        const productDetails = `<b>${product.name}</b><br>${product.description}`;
+                        renderMessage('ai', { image: product.image, text: productDetails.trim() });
+                    }, (index + 1) * 500);
+                });
+            } else {
+                 renderMessage('ai', { text: "I couldn't find any product information in the database." });
+            }
+        }
+
+        // --- AI & Database Functions ---
+        async function getChatbotResponse(messageText) {
+            // This function now uses a smarter, two-step approach.
+
+            // Step 1: Define a function to find specific, relevant data from our knowledge base.
+            const findRelevantData = (query, data) => {
+                const lowerQuery = query.toLowerCase();
+                // Create a list of keywords for each section of your data.
+                const keywordMap = {
+                    // *** FIXED: Added 'social media' and platform names to this list ***
+                    contact: ['contact', 'email', 'phone', 'address', 'social media', 'linkedin', 'facebook', 'youtube'],
+                    leadership: ['owner', 'director', 'founder', 'gunajit'],
+                    awardsAndRecognition: ['award', 'recognition'],
+                    tourism: ['tour', 'tourism', 'eco-tourism'],
+                    mission: ['mission', 'philosophy', 'about us', 'company info'],
+                };
+
+                // Check for specific keywords.
+                for (const key in keywordMap) {
+                    if (keywordMap[key].some(keyword => lowerQuery.includes(keyword))) {
+                        // For 'contact', we need to check if it's specifically about social media
+                        if (key === 'contact' && lowerQuery.includes('social media')) {
+                             return { context: data.contact.socialMedia, found: true };
+                        }
+                        return { context: data[key] || (data.services && data.services[key]), found: true };
+                    }
+                }
+                // Check for product names.
+                for (const product of data.products) {
+                    if (lowerQuery.includes(product.name.toLowerCase())) {
+                        return { context: product, found: true };
+                    }
+                }
+                // If no specific keywords are found, return nothing.
+                return { context: null, found: false };
+            };
+
+            const { context, found } = findRelevantData(messageText, appState.dynamicKnowledge);
+            
+            let finalPrompt;
+
+            if (found) {
+                // SCENARIO A: Specific data was found. Use the strict, context-based prompt.
+                finalPrompt = `You are a specialized AI assistant for Jeev Anksh Eco Products. Your ONLY source of information is the JSON data provided below in the "TARGETED CONTEXT" section.
+                
+                **TASK:** Formulate a helpful, natural language answer based **only** on the provided context. Format emails, websites, and names clearly.
+
+                ---
+                **TARGETED CONTEXT:**
+                ${JSON.stringify(context)}
+                ---
+
+                **User Question:**
+                "${messageText}"`;
+            } else {
+                // SCENARIO B: No specific data found. Use Gemini's general knowledge for a helpful response.
+                finalPrompt = `You are a friendly and helpful AI assistant for Jeev Anksh Eco Products, an organic food and eco-tourism company. The user has asked a question for which there is no specific information in your database.
+                
+                **YOUR TASK:**
+                1.  **Do NOT** say "I don't have that information."
+                2.  Instead, use your general knowledge to provide a helpful, intelligent answer that is relevant to the user's question.
+                3.  Gently frame your answer to manage expectations, for example: "While I don't have specific company data on that, generally speaking in the eco-products industry..." or "That's an interesting question! From a broader perspective...".
+                4.  Always maintain a positive, helpful, and conversational tone.
+
+                **User Question:**
+                "${messageText}"`;
+            }
+            
+            return await callGemini(finalPrompt);
+        }async function isQuestionSuggestionWorthy(question) {
+            console.log("Checking if question is worthy:", question);
+            const prompt = `Is the following user query a substantial question about a business, its products, or services? Answer with only "YES" or "NO". Ignore simple greetings like "hi", "hello", or conversational filler like "how are you". Question: "${question}"`;
+            try {
+                const response = await callGemini(prompt);
+                console.log("Gemini suggestion check response:", response);
+                return response.trim().toUpperCase().includes('YES');
+            } catch (error) {
+                console.error("Error in isQuestionSuggestionWorthy:", error);
+                return false;
+            }
+        }
+        
+        async function saveSuggestion(question) {
+            if (!db) return;
+            try {
+                await db.collection('userSuggestions').add({
+                    question: question,
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                console.log("Saved a quality suggestion to DB:", question);
+            } catch (error) {
+                console.error("Error saving suggestion:", error);
+            }
+        }
+
+        async function callGemini(prompt) {
+            try {
+                // The new URL points to our own secure serverless function
+                const response = await fetch('/api/gemini', { 
+                    method: 'POST', 
+                    headers: { 'Content-Type': 'application/json' }, 
+                    // We send the prompt in the body for our function to use
+                    body: JSON.stringify({ prompt: prompt }) 
+                });
+                if (!response.ok) throw new Error(`API Error: ${response.status}`);
+                const data = await response.json();
+                // The structure of the response from our function will be the same
+                return data.candidates?.[0]?.content?.parts?.[0]?.text || "I'm sorry, I had trouble processing that.";
+            } catch (error) {
+                console.error("Gemini API call failed:", error);
+                return "I'm having trouble connecting to my core intelligence right now.";
+            }
+        }
+
+        async function sendLiveChatMessage(text) {
+            if (!appState.liveChatSessionId || !db) return;
+            const chatRef = db.collection('liveChats').doc(appState.liveChatSessionId);
+            await chatRef.update({
+                messages: firebase.firestore.FieldValue.arrayUnion({
+                    sender: 'user',
+                    text: text,
+                    timestamp: Date.now()
+                })
+            });
+        }
+        // --- Live Chat & Post-Chat Implementation ---
+        async function requestLiveSupport() {
+            appState.mode = 'waiting_live_chat';
+            const chatRef = db.collection('liveChats').doc();
+            appState.liveChatSessionId = chatRef.id;
+            await chatRef.set({
+                userId: userId,
+                status: 'pending',
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                messages: [{ sender: 'system', text: 'User requested support.', timestamp: Date.now() }]
+            });
+            renderMessage('system', { text: "Connecting you to a live support agent. Please wait..." });
+            listenToLiveChat(appState.liveChatSessionId);
+        }
+function listenToLiveChat(sessionId, isAdmin = false) {
+            if (appState.liveChatUnsubscribe) appState.liveChatUnsubscribe();
+
+            let lastMessageTimestamp = 0; // Use this to track new messages for the user
+
+            appState.liveChatUnsubscribe = db.collection('liveChats').doc(sessionId)
+                .onSnapshot(doc => {
+                    if (!doc.exists) {
+                        if (isAdmin) {
+                            alert("This chat session has been ended by the user or deleted.");
+                            window.close();
+                        }
+                        // The endLiveChatSession function handles the user side.
+                        return;
+                    }
+
+                    const chatData = doc.data();
+
+                    if (isAdmin) {
+                        // ADMIN VIEW: Always clear and re-render the full history for context.
+                        const adminMessageContainer = document.getElementById('chat-messages');
+                        if (!adminMessageContainer) return;
+                        adminMessageContainer.innerHTML = '';
+                        chatData.messages.forEach(msg => {
+                            if (msg.sender === 'system') return;
+                            // In admin view, 'admin' messages are sent by them (looks like a user), and 'user' messages are received.
+                            const finalSenderType = (msg.sender === 'admin') ? 'user' : 'admin';
+                            renderMessage(finalSenderType, msg);
+                        });
+                    } else {
+                        // USER VIEW: A much smoother experience.
+                        
+                        // 1. Handle the moment the admin connects
+                        if (appState.mode === 'waiting_live_chat' && chatData.status === 'active') {
+                            appState.mode = 'live_chat';
+                            // DON'T clear the chat. Just show a connecting message.
+                            renderMessage('system', { text: `An admin has joined the chat.` });
+                            updateHeaderForLiveChat(true);
+                            // Update lastMessageTimestamp to avoid re-rendering old messages
+                            if (chatData.messages.length > 0) {
+                                lastMessageTimestamp = chatData.messages[chatData.messages.length - 1].timestamp;
+                            }
+                        }
+
+                        // 2. Handle the session being closed by the admin
+                        if (chatData.status === 'closed_by_admin' && appState.mode !== 'post_chat') {
+                            endLiveChatSession(false, chatData.secretCode);
+                            return;
+                        }
+
+                        // 3. Render only NEW messages from the admin
+                        chatData.messages.forEach(msg => {
+                            if (msg.timestamp > lastMessageTimestamp) {
+                                if (msg.sender === 'admin') {
+                                    renderMessage('admin', msg);
+                                }
+                                lastMessageTimestamp = msg.timestamp;
+                            }
+                        });
+                    }
+                });
+        }
+
+        async function sendAdminMessage() {
+            const adminInput = document.getElementById('admin-chat-input');
+            const text = adminInput.value.trim();
+            if (text === '' || !appState.liveChatSessionId || !db) return;
+            adminInput.value = '';
+            renderMessage('admin', { text });
+            await db.collection('liveChats').doc(appState.liveChatSessionId).update({
+                messages: firebase.firestore.FieldValue.arrayUnion({ sender: 'admin', text, timestamp: Date.now() })
+            });
+        }
+        
+        function endLiveChatSession(endedByUser = true, secretCode = null) {
+            if (appState.liveChatUnsubscribe) {
+                appState.liveChatUnsubscribe();
+                appState.liveChatUnsubscribe = null;
+            }
+            appState.mode = 'post_chat';
+            document.getElementById('input-area').style.display = 'none';
+
+            if (secretCode) {
+                renderMessage('system', { text: `Live chat session has ended. Your reference code is: <b>${secretCode}</b>` });
+                renderPostChatOptions();
+            } else {
+                // User ended chat, not yet implemented
+            }
+        }
+        
+        function renderPostChatOptions() {
+            const optionsWrapper = document.createElement('div');
+            optionsWrapper.className = 'post-chat-options';
+            optionsWrapper.innerHTML = `
+                <button id="req-another-session">Request Another Live Session</button>
+                <button id="continue-ai">Continue with AI</button>
+                <button id="end-and-rate">End Chat & Rate</button>
+            `;
+            document.getElementById('chat-messages').appendChild(optionsWrapper);
+            document.getElementById('req-another-session').addEventListener('click', requestLiveSupport);
+            document.getElementById('continue-ai').addEventListener('click', () => {
+                appState.mode = 'ai_chat';
+                document.getElementById('input-area').style.display = 'block';
+                optionsWrapper.remove();
+                renderMessage('ai', { text: "I'm here to help. What would you like to ask?" });
+            });
+            document.getElementById('end-and-rate').addEventListener('click', () => {
+                optionsWrapper.innerHTML = '';
+                renderRatingUI(optionsWrapper);
+            });
+        }
+
+        function renderRatingUI(container) {
+            container.innerHTML = `
+                <p class="text-center font-semibold">Please rate your support experience:</p>
+                <div class="star-rating">
+                    <span class="star" data-value="1">★</span>
+                    <span class="star" data-value="2">★</span>
+                    <span class="star" data-value="3">★</span>
+                    <span class="star" data-value="4">★</span>
+                    <span class="star" data-value="5">★</span>
+                </div>
+            `;
+            container.querySelectorAll('.star').forEach(star => {
+                star.addEventListener('click', () => {
+                    saveChatRating(star.dataset.value);
+                    container.innerHTML = `<p class="text-center text-green-600 font-semibold">Thank you for your feedback!</p>`;
+                });
+            });
+        }
+
+        async function saveChatRating(rating) {
+            if (!db || !appState.liveChatSessionId) return;
+            try {
+                await db.collection('chatRatings').add({
+                    sessionId: appState.liveChatSessionId,
+                    rating: parseInt(rating, 10),
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                });
+            } catch(error) {
+                console.error("Error saving rating:", error);
+            }
+        }
+
+        async function endChatByAdmin() {
+            if (!appState.liveChatSessionId || !db) return;
+            const secretCode = `S${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+            await db.collection('liveChats').doc(appState.liveChatSessionId).update({
+                status: 'closed_by_admin',
+                secretCode: secretCode
+            });
+            // The document is not deleted immediately, allowing the user to see the secret code.
+            // A cleanup function could delete old, closed chats later.
+            window.close();
+        }
+
+        function updateHeaderForLiveChat(isLive) {
+            const headerTitle = document.getElementById('header-title');
+            const headerStatus = document.getElementById('header-status');
+            const headerAvatar = document.getElementById('header-avatar');
+            if (isLive) {
+                headerTitle.textContent = 'Live Support';
+                headerStatus.innerHTML = `<span class="w-2 h-2 bg-blue-500 rounded-full mr-2"></span> Chatting with Admin`;
+                headerAvatar.style.borderColor = 'var(--admin-primary)';
+            } else {
+                headerTitle.textContent = 'Jeev Anksh AI Assistant';
+                headerStatus.innerHTML = `<span class="w-2 h-2 bg-green-500 rounded-full mr-2"></span> Online`;
+                headerAvatar.style.borderColor = 'var(--brand-primary)';
+            }
+        }
+        // --- Admin Panel ---
+        let adminUnsubscribe = null;
+        function switchMode(mode) {
+            if (mode === 'admin_panel') {
+                appState.mode = 'admin_panel';
+                renderAdminPanelInterface();
+                listenForLiveChatRequests();
+            }
+        }
+
+        
+        function renderAdminPanelInterface() {
+            appContainer.innerHTML = `<div id="admin-panel-view" class="p-4 md:p-8"></div>`;
+        }
+
+        function listenForLiveChatRequests() {
+            if (adminUnsubscribe) adminUnsubscribe();
+            adminUnsubscribe = db.collection('liveChats').where('status', '==', 'pending')
+                .onSnapshot(snapshot => {
+                    const requests = [];
+                    snapshot.forEach(doc => requests.push({ id: doc.id, ...doc.data() }));
+                    const adminView = document.getElementById('admin-panel-view');
+                    if(adminView) {
+                        let requestsHTML = '<p class="text-gray-500">No users are currently waiting for support.</p>';
+                        if (requests.length > 0) {
+                            requestsHTML = requests.map(req => `
+                                <div class="live-support-request">
+                                    <div><p class="font-semibold">User ID: ${req.userId}</p></div>
+                                    <button data-id="${req.id}" class="connect-btn bg-green-600 text-white px-4 py-1 rounded-md">Connect</button>
+                                </div>`).join('');
+                        }
+                        adminView.innerHTML = `<div class="admin-card max-w-2xl mx-auto"><h2 class="text-2xl font-bold mb-4">Live Support Queue</h2><div id="live-queue">${requestsHTML}</div></div>`;
+                        adminView.querySelectorAll('.connect-btn').forEach(btn => btn.addEventListener('click', connectToUser));
+                    }
+                });
+        }
+
+        async function connectToUser(e) {
+            const sessionId = e.target.getAttribute('data-id');
+            await db.collection('liveChats').doc(sessionId).update({ status: 'active' });
+            window.open(`?adminChatSession=${sessionId}`, '_blank');
+        }
+    
+    </script>
+</body>
+</html>
